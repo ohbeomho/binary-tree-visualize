@@ -77,6 +77,7 @@ func (tree BinaryTree) getSuccessor(node *Node) *Node {
 	return curr
 }
 
+// TODO: Change it for visualization like insert function
 func (tree *BinaryTree) remove(node *Node) {
 	successor := tree.getSuccessor(node)
 
@@ -137,15 +138,4 @@ func main() {
 	}
 
 	printTree(tree.root, 0)
-
-	var target int
-	fmt.Scan(&target)
-
-	found, path := tree.search(target)
-
-	if found {
-		tree.remove(path[len(path)-1])
-
-		printTree(tree.root, 0)
-	}
 }
