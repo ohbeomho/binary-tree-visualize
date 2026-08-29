@@ -9,14 +9,42 @@
     <body>
         <script src="wasm_exec.js"></script>
         <script>
-            const go = new Go();
-            WebAssembly.instantiateStreaming(
-                fetch("main.wasm"),
-                go.importObject,
-            ).then((result) => {
-                console.log(result.instance.exports);
+            (async () => {
+                const go = new Go();
+                const result = await WebAssembly.instantiateStreaming(
+                    fetch("main.wasm"),
+                    go.importObject,
+                );
+
                 go.run(result.instance);
-            });
+                const { treeInit, treeInsert, treeSearch } =
+                    result.instance.exports;
+                console.log(result.instance.exports);
+
+                const levels = 10;
+                let treeSize = 0;
+
+                for (let i = 0; i <= levels; i++) treeSize += Math.pow(2, i);
+
+                const addr = treeInit(levels);
+                for (let i = 0; i < 10; i++) {
+                    const num = Math.floor(Math.random() * 100);
+                    console.log(num);
+                    treeInsert(num);
+                }
+
+                const getKey = (idx) => go.mem.getInt32(addr + idx * 4, true);
+                console.log("-----");
+
+                const printTree = (idx) => {
+                    if (idx > treeSize || getKey(idx) === 0) return;
+
+                    console.log(getKey(idx));
+                    printTree(idx * 2);
+                    printTree(idx * 2 + 1);
+                };
+                printTree(1);
+            })();
         </script>
     </body>
 </html>

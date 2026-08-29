@@ -5,18 +5,20 @@ import (
 	"unsafe"
 )
 
+// error code
+// -1 invalid value
+// -2 tree not initialized
+// -3 insufficient tree size
+
 // root = 1
 // left child = index * 2
 // right child = index * 2 + 1
 var tree []int32
+var treeSize int32
 var initialized = false
-
-// Figure out how to return array
 
 //go:wasmexport treeInit
 func initTree(levels int32) unsafe.Pointer {
-	var treeSize int32
-
 	for i := range levels + 1 {
 		treeSize += 2 ^ i
 	}
@@ -28,36 +30,42 @@ func initTree(levels int32) unsafe.Pointer {
 }
 
 //go:wasmexport treeInsert
-func insert(key int32) {
+func insert(key int32) int32 {
 	if !initialized {
-		return
+		return -2
 	}
 
-	// 0을 빈 값으로 사용하기 위함
-	if key == 0 {
-		return
+	// 0 및 음수를 에러 코드로 사용하기 위함
+	if key <= 0 {
+		return -1
 	}
 
-	curr := 1
+	var curr int32 = 1
 	for tree[curr] != 0 {
 		if key > tree[curr] {
 			curr = curr*2 + 1
 		} else {
 			curr = curr * 2
 		}
+
+		if curr > treeSize {
+			return -3
+		}
 	}
 
 	tree[curr] = key
+
+	return 0
 }
 
 //go:wasmexport treeSearch
 func search(key int32) int32 {
 	if !initialized {
-		return 0
+		return -2
 	}
 
-	if key == 0 {
-		return 0
+	if key <= 0 {
+		return -1
 	}
 
 	var curr int32 = 1
@@ -70,12 +78,12 @@ func search(key int32) int32 {
 	}
 
 	if tree[curr] == 0 {
-		return 0
+		return -1
 	}
 
 	return curr
 }
 
 func main() {
-	fmt.Println("test")
+	fmt.Println("Go wasm loaded")
 }
