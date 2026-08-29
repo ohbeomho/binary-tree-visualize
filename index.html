@@ -4,47 +4,143 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Binary Tree Visualization</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+            }
+
+            canvas {
+                border: 1px solid black;
+            }
+
+            span#text-width {
+                position: absolute;
+                left: -999px;
+                top: -999px;
+                padding: 0;
+                margin: 0;
+            }
+        </style>
     </head>
 
     <body>
+        <canvas width="1000" height="1000"></canvas>
+        <span id="text-width"></span>
+        <div>
+            <input type="number" id="key-input" min="1" />
+        </div>
+
         <script src="wasm_exec.js"></script>
         <script>
-            (async () => {
-                const go = new Go();
-                const result = await WebAssembly.instantiateStreaming(
-                    fetch("main.wasm"),
-                    go.importObject,
-                );
+            const go = new Go();
 
+            const levels = 10;
+            let treeSize = 0;
+
+            for (let i = 0; i <= levels; i++) treeSize += Math.pow(2, i);
+
+            let treeAddr, treeInit, treeInsert, treeSearch;
+            const getKey = (idx) => {
+                if (!treeAddr) return -2;
+
+                go.mem.getInt32(treeAddr + idx * 4, true);
+            };
+
+            WebAssembly.instantiateStreaming(
+                fetch("main.wasm"),
+                go.importObject,
+            ).then((result) => {
                 go.run(result.instance);
-                const { treeInit, treeInsert, treeSearch } =
-                    result.instance.exports;
-                console.log(result.instance.exports);
 
-                const levels = 10;
-                let treeSize = 0;
+                const exports = result.instance.exports;
+                treeInit = exports.treeInit;
+                treeInsert = exports.treeInsert;
+                treeSearch = exports.treeSearch;
 
-                for (let i = 0; i <= levels; i++) treeSize += Math.pow(2, i);
+                treeAddr = treeInit(levels);
+            });
 
-                const addr = treeInit(levels);
-                for (let i = 0; i < 10; i++) {
-                    const num = Math.floor(Math.random() * 100);
-                    console.log(num);
-                    treeInsert(num);
+            const canvas = document.querySelector("canvas");
+            const ctx = canvas.getContext("2d");
+
+            const NODE_SIZE = 25;
+
+            const nodes = [];
+
+            const textWidthSpan = document.getElementById("text-width");
+            function getTextSize(str) {
+                textWidthSpan.textContent = str;
+                return textWidthSpan.getBoundingClientRect();
+            }
+
+            function drawTree() {
+                if (!treeAddr) return;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                for (let node of nodes) {
+                    ctx.fillRect(
+                        node.x - NODE_SIZE / 2,
+                        node.y - NODE_SIZE / 2,
+                        NODE_SIZE,
+                        NODE_SIZE,
+                    );
+
+                    const { width, height } = getTextSize(getKey(node.idx));
+                    ctx.fillText(
+                        getKey(node.idx),
+                        node.x - width / 2,
+                        node.y - height / 2,
+                    );
                 }
+            }
 
-                const getKey = (idx) => go.mem.getInt32(addr + idx * 4, true);
-                console.log("-----");
+            function updateNodes() {
+                if (!treeAddr) return;
 
-                const printTree = (idx) => {
-                    if (idx > treeSize || getKey(idx) === 0) return;
+                nodes.splice(0, nodes.length);
 
-                    console.log(getKey(idx));
-                    printTree(idx * 2);
-                    printTree(idx * 2 + 1);
+                const getNode = (idx, x, y) => {
+                    if (idx > treeSize || tree[idx] === 0) return;
+
+                    nodes.push({ idx, x, y });
+
+                    getNode(idx * 2, x - x / 2, y + 50);
+                    getNode(idx * 2 + 1, x + x / 2, y + 50);
                 };
-                printTree(1);
-            })();
+
+                getNode(1, canvas.width / 2, 50);
+            }
+
+            function updatePosition(addX, addY) {
+                if (!treeAddr) return;
+
+                for (let node of nodes) {
+                    node.x += addX;
+                    node.y += addY;
+                }
+            }
+
+            function insert(key) {
+                if (!treeAddr) return;
+
+                treeInsert(treeAddr, key);
+
+                updateNodes();
+                drawTree();
+            }
+
+            function remove(key) {
+                if (!treeAddr) return;
+
+                const target = treeSearch(key);
+                // TODO: Remove target key
+            }
         </script>
     </body>
 </html>

@@ -6,6 +6,7 @@ import (
 )
 
 // error code
+// 0 no error; successful
 // -1 invalid value
 // -2 tree not initialized
 // -3 insufficient tree size
@@ -83,6 +84,8 @@ func search(key int32) int32 {
 
 	return curr
 }
+
+// TODO: remove function
 
 func main() {
 	fmt.Println("Go wasm loaded")
