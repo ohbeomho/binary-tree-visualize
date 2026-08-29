@@ -11,6 +11,7 @@ import (
 // -1 invalid value
 // -2 tree not initialized
 // -3 insufficient tree size
+// -4 not found
 
 // root = 1
 // left child = index * 2
@@ -81,7 +82,7 @@ func search(key int32) int32 {
 	}
 
 	if tree[curr] == 0 {
-		return -1
+		return -4
 	}
 
 	return int32(curr)

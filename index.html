@@ -37,11 +37,12 @@
         <div>
             <input type="number" id="key-input" min="1" />
             <button id="insert">Insert</button>
-            <button id="insert">Search</button>
+            <button id="search">Search</button>
             <button id="remove">Remove</button>
         </div>
         <div>
             <button id="reset-camera">Reset Camera Position</button>
+            <button id="clear-highlight">Clear Search Highlight</button>
         </div>
 
         <script src="wasm_exec.js"></script>
@@ -82,7 +83,12 @@
             const NODE_HEIGHT = 50;
 
             const nodes = [],
-                edges = [];
+                edges = [],
+                highlighted = [];
+            // nodeMap - (idx : node obj)
+            // edgeMap - (idx : edge to parent)
+            const nodeMap = new Map(),
+                edgeMap = new Map();
 
             const textSize = document.getElementById("text-size");
             const { width: textWidth, height: textHeight } =
@@ -132,7 +138,55 @@
                     ctx.stroke();
                 }
 
+                for (let h of highlighted) {
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = "#167ef5";
+
+                    if (h.highlightType === "node")
+                        ctx.strokeRect(
+                            h.x - h.width / 2,
+                            h.y - NODE_HEIGHT / 2,
+                            h.width,
+                            NODE_HEIGHT,
+                        );
+                    else {
+                        ctx.beginPath();
+                        ctx.moveTo(
+                            h.parent.x +
+                                (h.type === "left"
+                                    ? -(h.parent.width / 2)
+                                    : h.parent.width / 2),
+                            h.parent.y + NODE_HEIGHT / 2,
+                        );
+                        ctx.lineTo(h.child.x, h.child.y - NODE_HEIGHT / 2);
+                        ctx.stroke();
+                    }
+
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = "black";
+                }
+
                 ctx.restore();
+            }
+
+            function highlightNode(idx) {
+                if (!nodeMap.has(idx)) return;
+                highlighted.push({
+                    ...nodeMap.get(idx),
+                    highlightType: "node",
+                });
+            }
+
+            function highlightEdge(idx) {
+                if (!edgeMap.has(idx)) return;
+                highlighted.push({
+                    ...edgeMap.get(idx),
+                    highlightType: "edge",
+                });
+            }
+
+            function clearHighlight() {
+                highlighted.splice(0, highlighted.length);
             }
 
             function addOffset(x, y) {
@@ -148,12 +202,10 @@
                 nodes.splice(0, nodes.length);
                 edges.splice(0, edges.length);
 
-                const nodeMap = new Map();
-
                 const getNodes = (idx, x, y, level) => {
                     if (idx > treeSize || getKey(idx) === 0) return;
 
-                    nodes.push({
+                    const node = {
                         idx,
                         x,
                         y,
@@ -161,8 +213,10 @@
                             textWidth * (String(getKey(idx)).length + 2),
                             NODE_HEIGHT,
                         ),
-                    });
-                    nodeMap.set(idx, nodes[nodes.length - 1]);
+                    };
+
+                    nodes.push(node);
+                    nodeMap.set(idx, node);
 
                     const childXOffset = canvas.width / Math.pow(2, level + 2);
                     const leftX = x - childXOffset,
@@ -173,22 +227,28 @@
                     getNodes(idx * 2 + 1, rightX, childY, level + 1);
                 };
 
-                const getEdges = (idx, parent = null) => {
+                const getEdges = (idx) => {
                     if (idx > treeSize || getKey(idx) === 0) return;
-                    const currNode = nodeMap.get(idx);
+                    const currNode = nodeMap.get(idx),
+                        parentIdx = Math.floor(idx / 2);
 
-                    if (parent)
-                        edges.push({
-                            parent,
+                    if (parentIdx > 0) {
+                        const parentNode = nodeMap.get(parentIdx);
+                        const edge = {
+                            parent: parentNode,
                             child: currNode,
                             type:
-                                getKey(idx) > getKey(parent.idx)
+                                getKey(idx) > getKey(parentIdx)
                                     ? "right"
                                     : "left",
-                        });
+                        };
 
-                    getEdges(idx * 2, currNode);
-                    getEdges(idx * 2 + 1, currNode);
+                        edges.push(edge);
+                        edgeMap.set(idx, edge);
+                    }
+
+                    getEdges(idx * 2);
+                    getEdges(idx * 2 + 1);
                 };
 
                 getNodes(1, canvas.width / 2, 50, 0);
@@ -207,24 +267,53 @@
                 drawTree();
             }
 
-            function search(key) {
+            function search() {
                 if (!treeAddr) return;
 
-                // TODO: Highlight search path
+                const key = keyInput.valueAsNumber;
+                if (isNaN(key)) return;
+
+                const result = treeSearch(key);
+
+                if (result === -4) {
+                    alert("Key not found");
+                    return;
+                }
+
+                clearHighlight();
+                let curr = result;
+                while (curr >= 1) {
+                    highlightNode(curr);
+                    highlightEdge(curr);
+
+                    curr = Math.floor(curr / 2);
+                }
+
+                drawTree();
             }
 
-            function remove(key) {
+            function remove() {
                 if (!treeAddr) return;
 
+                const key = keyInput.valueAsNumber;
+                if (isNaN(key)) return;
+
                 const target = treeSearch(key);
+
                 // TODO: Remove target key
+
+                clearHighlight();
+                updateNodes();
+                drawTree();
             }
 
             const keyInput = document.getElementById("key-input");
             const insertButton = document.getElementById("insert"),
                 searchButton = document.getElementById("search"),
                 removeButton = document.getElementById("remove");
-            const resetCameraButton = document.getElementById("reset-camera");
+            const resetCameraButton = document.getElementById("reset-camera"),
+                clearHighlightButton =
+                    document.getElementById("clear-highlight");
 
             keyInput.addEventListener("input", () => {
                 const key = keyInput.valueAsNumber;
@@ -234,6 +323,8 @@
             });
 
             insertButton.addEventListener("click", insert);
+            searchButton.addEventListener("click", search);
+            removeButton.addEventListener("click", remove);
 
             const mouseDown = {};
             let mousePos = { x: null, y: null };
@@ -262,6 +353,10 @@
             resetCameraButton.addEventListener("click", () =>
                 addOffset(-offsetX, -offsetY),
             );
+            clearHighlightButton.addEventListener("click", () => {
+                clearHighlight();
+                drawTree();
+            });
         </script>
     </body>
 </html>
