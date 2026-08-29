@@ -41,7 +41,7 @@ func insert(key int32) int32 {
 		return -1
 	}
 
-	var curr int32 = 1
+	curr := 1
 	for tree[curr] != 0 {
 		if key > tree[curr] {
 			curr = curr*2 + 1
@@ -49,7 +49,7 @@ func insert(key int32) int32 {
 			curr = curr * 2
 		}
 
-		if curr > treeSize {
+		if curr > int(treeSize) {
 			return -3
 		}
 	}
@@ -69,7 +69,7 @@ func search(key int32) int32 {
 		return -1
 	}
 
-	var curr int32 = 1
+	curr := 1
 	for tree[curr] != 0 && tree[curr] != key {
 		if key > tree[curr] {
 			curr = curr*2 + 1
@@ -82,7 +82,7 @@ func search(key int32) int32 {
 		return -1
 	}
 
-	return curr
+	return int32(curr)
 }
 
 // TODO: remove function

@@ -18,21 +18,26 @@
                 border: 1px solid black;
             }
 
-            span#text-width {
+            span#text-size {
                 position: absolute;
                 left: -999px;
                 top: -999px;
                 padding: 0;
                 margin: 0;
+                font-family: monospace;
+                font-size: 16px;
             }
         </style>
     </head>
 
     <body>
         <canvas width="1000" height="1000"></canvas>
-        <span id="text-width"></span>
+        <span id="text-size">a</span>
         <div>
             <input type="number" id="key-input" min="1" />
+            <button id="insert">Insert</button>
+            <button id="insert">Search</button>
+            <button id="remove">Remove</button>
         </div>
 
         <script src="wasm_exec.js"></script>
@@ -48,7 +53,7 @@
             const getKey = (idx) => {
                 if (!treeAddr) return -2;
 
-                go.mem.getInt32(treeAddr + idx * 4, true);
+                return go.mem.getInt32(treeAddr + idx * 4, true);
             };
 
             WebAssembly.instantiateStreaming(
@@ -68,15 +73,15 @@
             const canvas = document.querySelector("canvas");
             const ctx = canvas.getContext("2d");
 
-            const NODE_SIZE = 25;
+            ctx.font = "16px monospace";
+
+            const NODE_HEIGHT = 50;
 
             const nodes = [];
 
-            const textWidthSpan = document.getElementById("text-width");
-            function getTextSize(str) {
-                textWidthSpan.textContent = str;
-                return textWidthSpan.getBoundingClientRect();
-            }
+            const textSize = document.getElementById("text-size");
+            const { width: textWidth, height: textHeight } =
+                textSize.getBoundingClientRect();
 
             function drawTree() {
                 if (!treeAddr) return;
@@ -84,18 +89,24 @@
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                 for (let node of nodes) {
-                    ctx.fillRect(
-                        node.x - NODE_SIZE / 2,
-                        node.y - NODE_SIZE / 2,
-                        NODE_SIZE,
-                        NODE_SIZE,
+                    const nodeTextWidth =
+                        textWidth * String(getKey(node.idx)).length;
+                    const nodeWidth = Math.max(
+                        textWidth * (String(getKey(node.idx)).length + 2),
+                        NODE_HEIGHT,
                     );
 
-                    const { width, height } = getTextSize(getKey(node.idx));
+                    ctx.strokeRect(
+                        node.x - nodeWidth / 2,
+                        node.y - NODE_HEIGHT / 2,
+                        nodeWidth,
+                        NODE_HEIGHT,
+                    );
+
                     ctx.fillText(
                         getKey(node.idx),
-                        node.x - width / 2,
-                        node.y - height / 2,
+                        node.x - nodeTextWidth / 2,
+                        node.y + 6,
                     );
                 }
             }
@@ -105,16 +116,26 @@
 
                 nodes.splice(0, nodes.length);
 
-                const getNode = (idx, x, y) => {
-                    if (idx > treeSize || tree[idx] === 0) return;
+                const getNode = (idx, x, y, level) => {
+                    if (idx > treeSize || getKey(idx) === 0) return;
 
                     nodes.push({ idx, x, y });
 
-                    getNode(idx * 2, x - x / 2, y + 50);
-                    getNode(idx * 2 + 1, x + x / 2, y + 50);
+                    getNode(
+                        idx * 2,
+                        x - canvas.width / Math.pow(2, level + 2),
+                        y + NODE_HEIGHT * 3,
+                        level + 1,
+                    );
+                    getNode(
+                        idx * 2 + 1,
+                        x + canvas.width / Math.pow(2, level + 2),
+                        y + NODE_HEIGHT * 3,
+                        level + 1,
+                    );
                 };
 
-                getNode(1, canvas.width / 2, 50);
+                getNode(1, canvas.width / 2, 50, 0);
             }
 
             function updatePosition(addX, addY) {
@@ -126,13 +147,22 @@
                 }
             }
 
-            function insert(key) {
+            function insert() {
                 if (!treeAddr) return;
 
-                treeInsert(treeAddr, key);
+                const key = keyInput.valueAsNumber;
+                if (isNaN(key)) return;
+
+                treeInsert(key);
 
                 updateNodes();
                 drawTree();
+            }
+
+            function search(key) {
+                if (!treeAddr) return;
+
+                // TODO: Highlight search path
             }
 
             function remove(key) {
@@ -141,6 +171,20 @@
                 const target = treeSearch(key);
                 // TODO: Remove target key
             }
+
+            const keyInput = document.getElementById("key-input");
+            const insertButton = document.getElementById("insert");
+            const searchButton = document.getElementById("search");
+            const removeButton = document.getElementById("remove");
+
+            keyInput.addEventListener("input", () => {
+                const key = keyInput.valueAsNumber;
+                if (isNaN(key)) return;
+
+                if (key < 0) keyInput.value = "1";
+            });
+
+            insertButton.addEventListener("click", insert);
         </script>
     </body>
 </html>
