@@ -7,11 +7,12 @@
         <style>
             body {
                 margin: 0;
-                padding: 0;
+                padding: 2rem 0;
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
                 align-items: center;
+                gap: 0.5rem;
             }
 
             canvas {
@@ -31,13 +32,16 @@
     </head>
 
     <body>
-        <canvas width="1000" height="1000"></canvas>
+        <canvas width="1280" height="720"></canvas>
         <span id="text-size">a</span>
         <div>
             <input type="number" id="key-input" min="1" />
             <button id="insert">Insert</button>
             <button id="insert">Search</button>
             <button id="remove">Remove</button>
+        </div>
+        <div>
+            <button id="reset-camera">Reset Camera Position</button>
         </div>
 
         <script src="wasm_exec.js"></script>
@@ -77,31 +81,34 @@
 
             const NODE_HEIGHT = 50;
 
-            const nodes = [];
+            const nodes = [],
+                edges = [];
 
             const textSize = document.getElementById("text-size");
             const { width: textWidth, height: textHeight } =
                 textSize.getBoundingClientRect();
+
+            let offsetX = 0,
+                offsetY = 0;
 
             function drawTree() {
                 if (!treeAddr) return;
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+                ctx.save();
+                ctx.translate(offsetX, offsetY);
+
                 for (let node of nodes) {
-                    const nodeTextWidth =
-                        textWidth * String(getKey(node.idx)).length;
-                    const nodeWidth = Math.max(
-                        textWidth * (String(getKey(node.idx)).length + 2),
+                    ctx.strokeRect(
+                        node.x - node.width / 2,
+                        node.y - NODE_HEIGHT / 2,
+                        node.width,
                         NODE_HEIGHT,
                     );
 
-                    ctx.strokeRect(
-                        node.x - nodeWidth / 2,
-                        node.y - NODE_HEIGHT / 2,
-                        nodeWidth,
-                        NODE_HEIGHT,
-                    );
+                    const nodeTextWidth =
+                        textWidth * String(getKey(node.idx)).length;
 
                     ctx.fillText(
                         getKey(node.idx),
@@ -109,42 +116,83 @@
                         node.y + 6,
                     );
                 }
+
+                for (let edge of edges) {
+                    const { parent, child, type } = edge;
+
+                    ctx.beginPath();
+                    ctx.moveTo(
+                        parent.x +
+                            (type === "left"
+                                ? -(parent.width / 2)
+                                : parent.width / 2),
+                        parent.y + NODE_HEIGHT / 2,
+                    );
+                    ctx.lineTo(child.x, child.y - NODE_HEIGHT / 2);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+
+            function addOffset(x, y) {
+                offsetX += x;
+                offsetY += y;
+
+                drawTree();
             }
 
             function updateNodes() {
                 if (!treeAddr) return;
 
                 nodes.splice(0, nodes.length);
+                edges.splice(0, edges.length);
 
-                const getNode = (idx, x, y, level) => {
+                const nodeMap = new Map();
+
+                const getNodes = (idx, x, y, level) => {
                     if (idx > treeSize || getKey(idx) === 0) return;
 
-                    nodes.push({ idx, x, y });
+                    nodes.push({
+                        idx,
+                        x,
+                        y,
+                        width: Math.max(
+                            textWidth * (String(getKey(idx)).length + 2),
+                            NODE_HEIGHT,
+                        ),
+                    });
+                    nodeMap.set(idx, nodes[nodes.length - 1]);
 
-                    getNode(
-                        idx * 2,
-                        x - canvas.width / Math.pow(2, level + 2),
-                        y + NODE_HEIGHT * 3,
-                        level + 1,
-                    );
-                    getNode(
-                        idx * 2 + 1,
-                        x + canvas.width / Math.pow(2, level + 2),
-                        y + NODE_HEIGHT * 3,
-                        level + 1,
-                    );
+                    const childXOffset = canvas.width / Math.pow(2, level + 2);
+                    const leftX = x - childXOffset,
+                        rightX = x + childXOffset,
+                        childY = y + NODE_HEIGHT * 3;
+
+                    getNodes(idx * 2, leftX, childY, level + 1);
+                    getNodes(idx * 2 + 1, rightX, childY, level + 1);
                 };
 
-                getNode(1, canvas.width / 2, 50, 0);
-            }
+                const getEdges = (idx, parent = null) => {
+                    if (idx > treeSize || getKey(idx) === 0) return;
+                    const currNode = nodeMap.get(idx);
 
-            function updatePosition(addX, addY) {
-                if (!treeAddr) return;
+                    if (parent)
+                        edges.push({
+                            parent,
+                            child: currNode,
+                            type:
+                                getKey(idx) > getKey(parent.idx)
+                                    ? "right"
+                                    : "left",
+                        });
 
-                for (let node of nodes) {
-                    node.x += addX;
-                    node.y += addY;
-                }
+                    getEdges(idx * 2, currNode);
+                    getEdges(idx * 2 + 1, currNode);
+                };
+
+                getNodes(1, canvas.width / 2, 50, 0);
+                getEdges(1);
             }
 
             function insert() {
@@ -173,9 +221,10 @@
             }
 
             const keyInput = document.getElementById("key-input");
-            const insertButton = document.getElementById("insert");
-            const searchButton = document.getElementById("search");
-            const removeButton = document.getElementById("remove");
+            const insertButton = document.getElementById("insert"),
+                searchButton = document.getElementById("search"),
+                removeButton = document.getElementById("remove");
+            const resetCameraButton = document.getElementById("reset-camera");
 
             keyInput.addEventListener("input", () => {
                 const key = keyInput.valueAsNumber;
@@ -185,6 +234,34 @@
             });
 
             insertButton.addEventListener("click", insert);
+
+            const mouseDown = {};
+            let mousePos = { x: null, y: null };
+            canvas.addEventListener(
+                "mousedown",
+                (e) => (mouseDown[e.button] = true),
+            );
+            canvas.addEventListener(
+                "mouseup",
+                (e) => (mouseDown[e.button] = false),
+            );
+            canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+            canvas.addEventListener("mousemove", (e) => {
+                const { x: prevX, y: prevY } = mousePos;
+                let currX = e.clientX,
+                    currY = e.clientY;
+
+                mousePos.x = currX;
+                mousePos.y = currY;
+
+                if (!mouseDown[0] || prevX === null) return;
+
+                addOffset(currX - prevX, currY - prevY);
+            });
+
+            resetCameraButton.addEventListener("click", () =>
+                addOffset(-offsetX, -offsetY),
+            );
         </script>
     </body>
 </html>

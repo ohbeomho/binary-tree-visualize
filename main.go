@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"unsafe"
 )
 
@@ -15,18 +16,19 @@ import (
 // left child = index * 2
 // right child = index * 2 + 1
 var tree []int32
-var treeSize int32
+var treeSize int32 = 0
 var initialized = false
 
 //go:wasmexport treeInit
 func initTree(levels int32) unsafe.Pointer {
 	for i := range levels + 1 {
-		treeSize += 2 ^ i
+		treeSize += int32(math.Pow(2, float64(i)))
 	}
 
 	tree = make([]int32, treeSize+1)
 
 	initialized = true
+
 	return unsafe.Pointer(&tree[0])
 }
 
