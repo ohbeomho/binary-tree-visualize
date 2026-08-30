@@ -88,7 +88,35 @@ func search(key int32) int32 {
 	return int32(curr)
 }
 
-// TODO: remove function
+func getSuccessor(idx int32) int32 {
+	curr := idx*2 + 1
+
+	if tree[curr] == 0 {
+		return -4
+	}
+
+	for tree[curr*2] != 0 {
+		curr *= 2
+	}
+
+	return curr
+}
+
+func moveUpSubtree(idx int32) {
+	tree[idx/2] = tree[idx]
+
+	// TODO: Move the subtree whose root is idx up
+}
+
+func remove(idx int32) int32 {
+	successor := getSuccessor(idx)
+
+	if successor == -4 {
+
+	}
+
+	return 0
+}
 
 func main() {
 	fmt.Println("Go wasm loaded")

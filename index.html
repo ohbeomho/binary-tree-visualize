@@ -54,7 +54,7 @@
 
             for (let i = 0; i <= levels; i++) treeSize += Math.pow(2, i);
 
-            let treeAddr, treeInit, treeInsert, treeSearch;
+            let treeAddr, treeInit, treeInsert, treeSearch, treeRemove;
             const getKey = (idx) => {
                 if (!treeAddr) return -2;
 
@@ -71,6 +71,7 @@
                 treeInit = exports.treeInit;
                 treeInsert = exports.treeInsert;
                 treeSearch = exports.treeSearch;
+                treeRemove = exports.treeRemove;
 
                 treeAddr = treeInit(levels);
             });
@@ -290,6 +291,8 @@
                 }
 
                 drawTree();
+
+                return result;
             }
 
             function remove() {
@@ -298,9 +301,9 @@
                 const key = keyInput.valueAsNumber;
                 if (isNaN(key)) return;
 
-                const target = treeSearch(key);
+                const target = search();
 
-                // TODO: Remove target key
+                treeRemove(target);
 
                 clearHighlight();
                 updateNodes();
