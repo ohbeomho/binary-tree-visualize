@@ -91,7 +91,7 @@ func search(key int32) int32 {
 func getSuccessor(idx int32) int32 {
 	curr := idx*2 + 1
 
-	if tree[curr] == 0 {
+	if curr > treeSize || tree[curr] == 0 {
 		return -4
 	}
 
@@ -103,16 +103,28 @@ func getSuccessor(idx int32) int32 {
 }
 
 func moveUpSubtree(idx int32) {
-	tree[idx/2] = tree[idx]
-
 	// TODO: Move the subtree whose root is idx up
 }
 
 func remove(idx int32) int32 {
 	successor := getSuccessor(idx)
 
-	if successor == -4 {
+	if successor == -4 { // no right child
+		if idx*2 > treeSize || tree[idx*2] == 0 { // no children
+			tree[idx] = 0
+			return 0
+		}
 
+		// only left child
+		moveUpSubtree(idx * 2)
+		return 0
+	}
+
+	// both left and right child exists
+	tree[idx] = tree[successor]
+	successorChild := successor*2 + 1
+	if successorChild <= treeSize && tree[successorChild] != 0 {
+		moveUpSubtree(successorChild)
 	}
 
 	return 0
