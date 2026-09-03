@@ -102,10 +102,19 @@ func getSuccessor(idx int32) int32 {
 	return curr
 }
 
-func moveUpSubtree(idx int32) {
-	// TODO: Move the subtree whose root is idx up
+func moveUpSubtree(idx int32, to int32) {
+	if idx > treeSize || tree[idx] == 0 {
+		return
+	}
+
+	tree[to] = tree[idx]
+	tree[idx] = 0
+
+	moveUpSubtree(idx*2, to*2)
+	moveUpSubtree(idx*2+1, to*2+1)
 }
 
+//go:wasmexport treeRemove
 func remove(idx int32) int32 {
 	successor := getSuccessor(idx)
 
@@ -116,15 +125,17 @@ func remove(idx int32) int32 {
 		}
 
 		// only left child
-		moveUpSubtree(idx * 2)
+		moveUpSubtree(idx*2, idx)
 		return 0
 	}
 
 	// both left and right child exists
 	tree[idx] = tree[successor]
+	tree[successor] = 0
+
 	successorChild := successor*2 + 1
 	if successorChild <= treeSize && tree[successorChild] != 0 {
-		moveUpSubtree(successorChild)
+		moveUpSubtree(successorChild, successor)
 	}
 
 	return 0

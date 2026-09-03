@@ -38,12 +38,12 @@
             <input type="number" id="key-input" min="1" />
             <button id="insert">Insert</button>
             <button id="search">Search</button>
-            <button id="remove">Remove</button>
         </div>
         <div>
             <button id="reset-camera">Reset Camera Position</button>
             <button id="clear-highlight">Clear Search Highlight</button>
         </div>
+        <div>Right click to remove a node</div>
 
         <script src="wasm_exec.js"></script>
         <script>
@@ -54,9 +54,15 @@
 
             for (let i = 0; i <= levels; i++) treeSize += Math.pow(2, i);
 
-            let treeAddr, treeInit, treeInsert, treeSearch, treeRemove;
+            /** @type {number | null} */
+            let treeAddr = null;
+            let treeInit, treeInsert, treeSearch, treeRemove;
+            /**
+             * @param {number} idx
+             * @returns {number}
+             */
             const getKey = (idx) => {
-                if (!treeAddr) return -2;
+                if (treeAddr === null) return -2;
 
                 return go.mem.getInt32(treeAddr + idx * 4, true);
             };
@@ -83,9 +89,18 @@
 
             const NODE_HEIGHT = 50;
 
-            const nodes = [],
-                edges = [],
-                highlighted = [];
+            /**
+             * @typedef {{idx: number, x: number, y: number, width: number}} Node
+             * @typedef {{parent: number, child: number, type: "right" | "left"}} Edge
+             * @typedef {{highlightType: "node" | "edge"}} HighlightTarget
+             * @typedef {Node & HighlightTarget} HighlightNode
+             * @typedef {Edge & HighlightTarget} HighlightEdge
+             */
+
+            const /** @type {Node[]} */ nodes = [],
+                /** @type {Edge[]} */ edges = [],
+                /** @type {(HighlightNode | HighlightEdge)[]} */ highlighted =
+                    [];
             // nodeMap - (idx : node obj)
             // edgeMap - (idx : edge to parent)
             const nodeMap = new Map(),
@@ -99,7 +114,9 @@
                 offsetY = 0;
 
             function drawTree() {
-                if (!treeAddr) return;
+                console.log("drawing tree");
+
+                if (treeAddr === null) return;
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -167,9 +184,27 @@
                     ctx.strokeStyle = "black";
                 }
 
+                if (hoveringNode) {
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = "#a61f1f";
+
+                    ctx.strokeRect(
+                        hoveringNode.x - hoveringNode.width / 2,
+                        hoveringNode.y - NODE_HEIGHT / 2,
+                        hoveringNode.width,
+                        NODE_HEIGHT,
+                    );
+
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = "black";
+                }
+
                 ctx.restore();
             }
 
+            /**
+             * @param {number} idx
+             */
             function highlightNode(idx) {
                 if (!nodeMap.has(idx)) return;
                 highlighted.push({
@@ -178,6 +213,9 @@
                 });
             }
 
+            /**
+             * @param {number} idx
+             */
             function highlightEdge(idx) {
                 if (!edgeMap.has(idx)) return;
                 highlighted.push({
@@ -190,6 +228,10 @@
                 highlighted.splice(0, highlighted.length);
             }
 
+            /**
+             * @param {number} x
+             * @param {number} y
+             */
             function addOffset(x, y) {
                 offsetX += x;
                 offsetY += y;
@@ -198,11 +240,17 @@
             }
 
             function updateNodes() {
-                if (!treeAddr) return;
+                if (treeAddr === null) return;
 
                 nodes.splice(0, nodes.length);
                 edges.splice(0, edges.length);
 
+                /**
+                 * @param {number} idx
+                 * @param {number} x
+                 * @param {number} y
+                 * @param {number} level
+                 */
                 const getNodes = (idx, x, y, level) => {
                     if (idx > treeSize || getKey(idx) === 0) return;
 
@@ -228,6 +276,9 @@
                     getNodes(idx * 2 + 1, rightX, childY, level + 1);
                 };
 
+                /**
+                 * @param {number} idx
+                 */
                 const getEdges = (idx) => {
                     if (idx > treeSize || getKey(idx) === 0) return;
                     const currNode = nodeMap.get(idx),
@@ -257,19 +308,21 @@
             }
 
             function insert() {
-                if (!treeAddr) return;
+                if (treeAddr === null) return;
 
                 const key = keyInput.valueAsNumber;
                 if (isNaN(key)) return;
 
                 treeInsert(key);
 
+                keyInput.value = "";
+
                 updateNodes();
                 drawTree();
             }
 
             function search() {
-                if (!treeAddr) return;
+                if (treeAddr === null) return;
 
                 const key = keyInput.valueAsNumber;
                 if (isNaN(key)) return;
@@ -296,7 +349,7 @@
             }
 
             function remove() {
-                if (!treeAddr) return;
+                if (treeAddr === null) return;
 
                 const key = keyInput.valueAsNumber;
                 if (isNaN(key)) return;
@@ -312,8 +365,7 @@
 
             const keyInput = document.getElementById("key-input");
             const insertButton = document.getElementById("insert"),
-                searchButton = document.getElementById("search"),
-                removeButton = document.getElementById("remove");
+                searchButton = document.getElementById("search");
             const resetCameraButton = document.getElementById("reset-camera"),
                 clearHighlightButton =
                     document.getElementById("clear-highlight");
@@ -327,7 +379,9 @@
 
             insertButton.addEventListener("click", insert);
             searchButton.addEventListener("click", search);
-            removeButton.addEventListener("click", remove);
+
+            /** @type {Node | null} */
+            let hoveringNode = null;
 
             const mouseDown = {};
             let mousePos = { x: null, y: null };
@@ -339,16 +393,46 @@
                 "mouseup",
                 (e) => (mouseDown[e.button] = false),
             );
-            canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+            canvas.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+
+                if (!hoveringNode) return;
+
+                treeRemove(hoveringNode.idx);
+                updateNodes();
+                drawTree();
+            });
             canvas.addEventListener("mousemove", (e) => {
                 const { x: prevX, y: prevY } = mousePos;
-                let currX = e.clientX,
-                    currY = e.clientY;
+                let currX = e.offsetX,
+                    currY = e.offsetY;
 
                 mousePos.x = currX;
                 mousePos.y = currY;
 
-                if (!mouseDown[0] || prevX === null) return;
+                if (prevX === null) return;
+                if (!mouseDown[0]) {
+                    let found = false,
+                        prevHovering = hoveringNode;
+
+                    for (let node of nodes) {
+                        if (
+                            currX - offsetX >= node.x - node.width / 2 &&
+                            currX - offsetX <= node.x + node.width / 2 &&
+                            currY - offsetY >= node.y - NODE_HEIGHT / 2 &&
+                            currY - offsetY <= node.y + NODE_HEIGHT / 2
+                        ) {
+                            found = true;
+                            hoveringNode = node;
+                            break;
+                        }
+                    }
+
+                    if (!found) hoveringNode = null;
+                    if (prevHovering != hoveringNode) drawTree();
+
+                    return;
+                }
 
                 addOffset(currX - prevX, currY - prevY);
             });
